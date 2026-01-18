@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Logic Calendar</title>
+    <title>Connected Calendar System</title>
     <style>
         :root {
             --primary: #4a90e2;
@@ -58,11 +58,8 @@
         .day.selected { border: 2px solid var(--primary); background-color: var(--light-blue); }
         .day.padding { cursor: default; }
 
-        /* Calendar Task Visualization */
         .cal-task-container { display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-top: 2px; }
-        .cal-task-bar {
-            font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
+        .cal-task-bar { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cal-event { background-color: var(--primary); color: white; }
         .cal-todo { background-color: #fff8e1; color: #d35400; border: 1px dashed var(--todo); }
         .cal-done { background-color: #e0e0e0; color: #888; text-decoration: line-through; border: 1px solid #ccc; }
@@ -82,11 +79,7 @@
         .row { display: flex; gap: 10px; align-items: center; }
         input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
         
-        /* Floating/Deadline Options */
-        .todo-options {
-            display: none; flex-direction: column; gap: 8px;
-            background: #fff8e1; padding: 10px; border-radius: 4px; border: 1px solid #ffe0b2;
-        }
+        .todo-options { display: none; flex-direction: column; gap: 8px; background: #fff8e1; padding: 10px; border-radius: 4px; border: 1px solid #ffe0b2; }
         .floating-option { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
         .floating-option input { width: auto; }
 
@@ -134,7 +127,13 @@
         .logic-number { background: #2c3e50; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 0.75rem; font-weight: bold; }
         .logic-title { font-weight: 700; color: #2c3e50; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
 
-        .context-card { background-color: #f9fbe7; border-left: 4px solid #c0ca33; padding: 12px; border-radius: 4px; color: #333; margin-bottom: 10px; cursor: pointer; }
+        .context-card { 
+            background-color: #f9fbe7; border-left: 4px solid #c0ca33; 
+            padding: 12px; border-radius: 4px; color: #333; margin-bottom: 10px; 
+            cursor: pointer; transition: transform 0.2s, background 0.2s;
+        }
+        .context-card:hover { transform: translateX(3px); background-color: #f0f4c3; }
+        
         .doc-manager { background: #fff; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; }
         .doc-list { list-style: none; padding: 0; margin: 0; }
         .doc-item { display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; border: 1px solid #eee; padding: 4px 8px; margin-bottom: 4px; border-radius: 4px; font-size: 0.8rem; }
@@ -149,6 +148,9 @@
         .action-bar { padding: 20px; text-align: right; background: #fafafa; border-top: 1px solid #eee; }
         .btn-delete { background: white; border: 1px solid var(--danger); color: var(--danger); padding: 8px 15px; border-radius: 4px; }
 
+        /* Animation for jump */
+        @keyframes flash { 0% { background-color: yellow; } 100% { background-color: transparent; } }
+        .highlight-flash { animation: flash 1.5s ease-out; }
     </style>
 </head>
 <body>
@@ -193,13 +195,13 @@
                     <input type="checkbox" id="floatingInput" onchange="toggleTimeInput()">
                     <div>
                         <strong>Auto-Schedule</strong><br>
-                        <span style="color:#666; font-size:0.75rem;">Automatically place before Linked Events</span>
+                        <span style="color:#666; font-size:0.75rem;">Insert before linked events</span>
                     </div>
                 </div>
 
                 <div class="row">
                     <div style="flex:1">
-                        <label style="font-size:0.75rem; color:#d35400; display:block; margin-bottom:2px; font-weight:bold;">Deadline Date (Optional)</label>
+                        <label style="font-size:0.75rem; color:#d35400; display:block; margin-bottom:2px; font-weight:bold;">Deadline Date</label>
                         <input id="deadlineDateInput" type="date" style="border-color:#ffe0b2;" />
                     </div>
                     <div style="flex:1">
@@ -230,12 +232,13 @@
     let selectedEventId = null;
     let currentType = 'event';
 
+    // Helpers
     const timeToMins = (t) => { if(!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const minsToTime = (m) => { const h = Math.floor(m / 60); const min = m % 60; return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`; };
     const toInputDate = (str) => { const d = new Date(str); return d.toISOString().split('T')[0]; }
     const fromInputDate = (str) => { const [y, m, d] = str.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; }
 
-    let rawEvents = localStorage.getItem('strategicEventsV6') ? JSON.parse(localStorage.getItem('strategicEventsV6')) : [];
+    let rawEvents = localStorage.getItem('strategicEventsV7') ? JSON.parse(localStorage.getItem('strategicEventsV7')) : [];
     let events = rawEvents.map(e => ({
         ...e,
         linkedToIds: e.linkedToIds || [],
@@ -290,52 +293,39 @@
         }
     }
 
-    // --- REFINED AUTO-SCHEDULER (Prioritization) ---
+    // --- AUTO-SCHEDULER (Prioritization) ---
     function runAutoScheduler() {
         const dayEvents = events.filter(e => e.date === clickedDate);
         const fixedEvents = dayEvents.filter(e => !e.isFloating).sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
         const floatingEvents = dayEvents.filter(e => e.isFloating);
         
         floatingEvents.forEach(e => e.calculatedTime = null);
+        const dayStart = 8 * 60; const dayEnd = 18 * 60;  
 
-        const dayStart = 8 * 60; 
-        const dayEnd = 18 * 60;  
-
-        // 1. CALCULATE EFFECTIVE DEADLINE FOR EACH FLOATING TASK FIRST
-        // This is critical for sorting. We need to know which one *must* happen earliest.
+        // 1. Calculate Effective Deadline
         floatingEvents.forEach(floatEvt => {
-            let deadlineMins = dayEnd; // Default to end of day
-
-            // A. Check explicit deadline
+            let deadlineMins = dayEnd; 
             if (floatEvt.deadlineDate === clickedDate && floatEvt.deadlineTime) {
                 deadlineMins = Math.min(deadlineMins, timeToMins(floatEvt.deadlineTime));
             }
-
-            // B. Check Linked Events (Parent Starts)
             if (floatEvt.linkedToIds.length > 0) {
                 floatEvt.linkedToIds.forEach(pid => {
                     const parent = dayEvents.find(e => e.id === pid);
                     if (parent) {
                         const pTime = parent.isFloating ? parent.calculatedTime : parent.time;
-                        if (pTime) {
-                            deadlineMins = Math.min(deadlineMins, timeToMins(pTime));
-                        }
+                        if (pTime) deadlineMins = Math.min(deadlineMins, timeToMins(pTime));
                     }
                 });
             }
             floatEvt.effectiveDeadline = deadlineMins;
         });
 
-        // 2. SORT FLOATING EVENTS BY URGENCY (Earliest Effective Deadline First)
+        // 2. Sort by Urgency
         floatingEvents.sort((a, b) => a.effectiveDeadline - b.effectiveDeadline);
 
-        // 3. SCHEDULE THEM ONE BY ONE
-        // Note: As we schedule them, they effectively become "fixed" for the next iteration in this loop
-        // because we build the 'occupied' list dynamically.
-        const occupied = [...fixedEvents]; // Start with hard fixed events
-
+        // 3. Schedule
+        const occupied = [...fixedEvents]; 
         floatingEvents.forEach(floatEvt => {
-            // Sort occupied slots by time
             occupied.sort((a,b) => {
                 const tA = a.isFloating ? a.calculatedTime : a.time;
                 const tB = b.isFloating ? b.calculatedTime : b.time;
@@ -346,32 +336,22 @@
             let found = false;
             let finalTime = null;
 
-            // Find gap
             for (let i = 0; i < occupied.length; i++) {
                 const s = occupied[i];
                 const sTime = s.isFloating ? s.calculatedTime : s.time;
                 if(!sTime) continue; 
-
                 const sStart = timeToMins(sTime);
                 const sEnd = sStart + parseInt(s.duration);
 
-                // If scheduled event starts after our deadline, stop checking (constraint violation)
-                // Actually, we shouldn't stop, we just can't overlap it.
-                
-                // Check gap: Start -> Next Event
-                if (sStart - currentSlotStart >= parseInt(floatEvt.duration)) {
-                    // Check constraint: Must finish before effectiveDeadline
-                    if (currentSlotStart + parseInt(floatEvt.duration) <= floatEvt.effectiveDeadline) {
-                        finalTime = minsToTime(currentSlotStart);
-                        found = true;
-                        break;
-                    }
+                if (sStart - currentSlotStart >= parseInt(floatEvt.duration) && 
+                    currentSlotStart + parseInt(floatEvt.duration) <= floatEvt.effectiveDeadline) {
+                    finalTime = minsToTime(currentSlotStart);
+                    found = true;
+                    break;
                 }
-                
                 if (sEnd > currentSlotStart) currentSlotStart = sEnd;
             }
 
-            // Check gap after last event
             if (!found) {
                 if (floatEvt.effectiveDeadline - currentSlotStart >= parseInt(floatEvt.duration)) {
                     finalTime = minsToTime(currentSlotStart);
@@ -381,10 +361,9 @@
 
             if (found) {
                 floatEvt.calculatedTime = finalTime;
-                // Add to occupied list so next floating tasks respect this one
                 occupied.push(floatEvt);
             } else {
-                floatEvt.calculatedTime = "18:00"; // Fail state
+                floatEvt.calculatedTime = "18:00"; 
             }
         });
     }
@@ -392,7 +371,6 @@
     // --- Core Render ---
     function load() {
         runAutoScheduler(); 
-
         const dt = new Date();
         if (nav !== 0) dt.setMonth(new Date().getMonth() + nav);
         const month = dt.getMonth(); 
@@ -414,17 +392,10 @@
                 if (dayString === clickedDate) daySquare.classList.add('selected');
 
                 const dayEvents = events.filter(e => e.date === dayString);
-                
                 if(dayEvents.length > 0) {
                     const taskContainer = document.createElement('div');
                     taskContainer.className = 'cal-task-container';
-                    dayEvents.sort((a,b) => {
-                        // Sort by computed time
-                        const tA = timeToMins(a.isFloating ? a.calculatedTime : a.time);
-                        const tB = timeToMins(b.isFloating ? b.calculatedTime : b.time);
-                        return tA - tB;
-                    });
-                    
+                    dayEvents.sort((a,b) => (a.type === 'event' ? -1 : 1));
                     dayEvents.slice(0, 3).forEach(evt => {
                         const bar = document.createElement('div');
                         bar.className = `cal-task-bar ${evt.isCompleted ? 'cal-done' : (evt.type === 'todo' ? 'cal-todo' : 'cal-event')}`;
@@ -434,7 +405,6 @@
                     if(dayEvents.length > 3) {
                         const more = document.createElement('div');
                         more.style.fontSize = '0.6rem';
-                        more.style.color = '#999';
                         more.innerText = `+${dayEvents.length - 3} more`;
                         taskContainer.appendChild(more);
                     }
@@ -471,6 +441,7 @@
 
             slotEvents.forEach(event => {
                 const eventCard = document.createElement('div');
+                eventCard.id = `card-${event.id}`;
                 eventCard.className = `event-card ${event.type === 'event' ? 'type-event' : 'type-todo'} ${event.isCompleted ? 'completed' : ''} ${event.isFloating ? 'floating' : ''}`;
                 if (selectedEventId === event.id) eventCard.classList.add('active');
 
@@ -484,7 +455,6 @@
                 let metaInfo = "";
                 if (event.isFloating) {
                     metaInfo = '<span class="auto-tag">AUTO</span>';
-                    // Show constraint source
                     if(event.linkedToIds.length > 0) {
                          const parent = events.find(e => e.id === event.linkedToIds[0]);
                          if(parent) metaInfo += ` <span class="constraint-tag">BEFORE: ${parent.title}</span>`;
@@ -508,14 +478,41 @@
         }
     }
 
-    function toggleCompletion(id) {
-        const index = events.findIndex(e => e.id === id);
-        if (index > -1) {
-            events[index].isCompleted = !events[index].isCompleted;
-            saveToStorage(); load();
-        }
+    // --- Jump / Navigation Logic ---
+    window.jumpToEvent = function(targetId, targetDate) {
+        // 1. Calc nav diff to switch month if needed
+        const targetDateObj = new Date(targetDate);
+        const currentDateObj = new Date(); // base reference for 'nav=0' is usually current real month, 
+        // but our 'nav' variable is offset from TODAY. 
+        // Better logic: set nav so that the calendar shows targetDate's month.
+        const today = new Date();
+        const monthDiff = (targetDateObj.getFullYear() - today.getFullYear()) * 12 + (targetDateObj.getMonth() - today.getMonth());
+        nav = monthDiff;
+
+        // 2. Set clicked date
+        clickedDate = targetDate;
+
+        // 3. Reload UI
+        load();
+        
+        // 4. Select the event
+        selectEvent(targetId);
+
+        // 5. Scroll to card in timeline
+        setTimeout(() => {
+            const card = document.getElementById(`card-${targetId}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('highlight-flash');
+                setTimeout(() => card.classList.remove('highlight-flash'), 1500);
+            }
+        }, 300);
     }
 
+    function toggleCompletion(id) {
+        const index = events.findIndex(e => e.id === id);
+        if (index > -1) { events[index].isCompleted = !events[index].isCompleted; saveToStorage(); load(); }
+    }
     function selectEvent(id) {
         selectedEventId = id;
         renderTimeline();
@@ -527,13 +524,8 @@
         const detailContent = document.getElementById('detail-content');
         const detailPlaceholder = document.getElementById('detail-placeholder');
         
-        if (!event) {
-            detailPlaceholder.style.display = 'flex';
-            detailContent.style.display = 'none';
-            return;
-        }
-        detailPlaceholder.style.display = 'none';
-        detailContent.style.display = 'block';
+        if (!event) { detailPlaceholder.style.display = 'flex'; detailContent.style.display = 'none'; return; }
+        detailPlaceholder.style.display = 'none'; detailContent.style.display = 'block';
 
         let linkOptions = '<option value="">-- Connect Event --</option>';
         events.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(evt => {
@@ -551,12 +543,17 @@
             event.linkedToIds.forEach(linkedId => {
                 const parent = events.find(e => e.id === linkedId);
                 if (parent) {
-                    contextHtml += `<div class="context-card"><span class="context-label">Summary from: ${parent.title}</span><div class="context-text">"${parent.outcome || 'No outcome recorded.'}"</div></div>`;
+                    contextHtml += `
+                        <div class="context-card" onclick="jumpToEvent('${parent.id}', '${parent.date}')">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span class="context-label">Summary from: ${parent.title}</span>
+                                <span style="font-size:0.8rem; color:#4a90e2;">&#8599; Go to</span>
+                            </div>
+                            <div class="context-text">"${parent.outcome || 'No outcome recorded.'}"</div>
+                        </div>`;
                 }
             });
-        } else {
-            contextHtml = '<div style="color:#aaa; font-style:italic; font-size:0.8rem;">No linked previous meetings.</div>';
-        }
+        } else { contextHtml = '<div style="color:#aaa; font-style:italic; font-size:0.8rem;">No linked previous meetings.</div>'; }
 
         const checkStatus = event.isCompleted ? 'checked' : '';
         const timeVal = event.time || ""; 
@@ -570,8 +567,7 @@
                 <div class="hero-meta-row" style="background:#fff8e1; border:1px solid #ffe0b2;">
                     <div style="flex:1"> <label style="font-size:0.7rem; color:#d35400;">Deadline Date</label> <input type="date" class="meta-input" style="width:100%" value="${ddVal}" onchange="updateMeta('${event.id}', 'deadlineDate', this.value)"> </div>
                     <div style="flex:1"> <label style="font-size:0.7rem; color:#d35400;">Deadline Time</label> <input type="time" class="meta-input" style="width:100%" value="${dtVal}" onchange="updateMeta('${event.id}', 'deadlineTime', this.value)"> </div>
-                </div>
-            `;
+                </div>`;
         }
         
         const autoCheck = event.isFloating ? 'checked' : '';
@@ -598,7 +594,7 @@
                     <div style="flex:1"> <label style="font-size:0.7rem; color:#888;">Dur(m)</label> <input type="number" class="meta-input" style="width:100%" value="${event.duration}" onchange="updateMeta('${event.id}', 'duration', this.value)"> </div>
                 </div>
                 ${deadlineHtml}
-                ${event.isFloating ? '<small style="color:#9b59b6">Auto-Scheduled: ' + event.calculatedTime + '</small>' : ''}
+                ${event.isFloating ? '<small style="color:#9b59b6">Auto-Scheduled for: ' + event.calculatedTime + '</small>' : ''}
             </div>
 
             <div style="padding:15px; border-bottom:1px solid #eee; background:#fafafa;">
@@ -622,81 +618,21 @@
     }
 
     // --- Actions ---
-    window.toggleAutoSchedule = function(id, isAuto) {
-        const idx = events.findIndex(e => e.id === id);
-        if (idx > -1) { events[idx].isFloating = isAuto; if (isAuto) events[idx].time = ""; saveToStorage(); load(); renderDetails(id); }
-    }
-    window.updateMeta = function(id, field, value) {
-        const idx = events.findIndex(e => e.id === id);
-        if (idx > -1) {
-            if (field === 'date' || field === 'deadlineDate') { events[idx][field] = fromInputDate(value); } 
-            else { events[idx][field] = value; }
-            if (field === 'time' && value !== "") { events[idx].isFloating = false; }
-            saveToStorage(); load(); renderDetails(id);
-        }
-    }
-    window.addDoc = function(eventId, section) {
-        const nameInput = document.getElementById(`name-${section}`);
-        const urlInput = document.getElementById(`url-${section}`);
-        if (nameInput.value && urlInput.value) {
-            const idx = events.findIndex(e => e.id === eventId);
-            if(!events[idx].docs[section]) events[idx].docs[section] = [];
-            events[idx].docs[section].push({ name: nameInput.value, url: urlInput.value });
-            saveToStorage(); renderDetails(eventId);
-        }
-    }
-    window.removeDoc = function(eventId, section, index) {
-        const idx = events.findIndex(e => e.id === eventId);
-        events[idx].docs[section].splice(index, 1);
-        saveToStorage(); renderDetails(eventId);
-    }
+    window.toggleAutoSchedule = function(id, isAuto) { const idx = events.findIndex(e => e.id === id); if (idx > -1) { events[idx].isFloating = isAuto; if (isAuto) events[idx].time = ""; saveToStorage(); load(); renderDetails(id); } }
+    window.updateMeta = function(id, field, value) { const idx = events.findIndex(e => e.id === id); if (idx > -1) { if (field === 'date' || field === 'deadlineDate') { events[idx][field] = fromInputDate(value); } else { events[idx][field] = value; } if (field === 'time' && value !== "") { events[idx].isFloating = false; } saveToStorage(); load(); renderDetails(id); } }
+    window.addDoc = function(eventId, section) { const nameInput = document.getElementById(`name-${section}`); const urlInput = document.getElementById(`url-${section}`); if (nameInput.value && urlInput.value) { const idx = events.findIndex(e => e.id === eventId); if(!events[idx].docs[section]) events[idx].docs[section] = []; events[idx].docs[section].push({ name: nameInput.value, url: urlInput.value }); saveToStorage(); renderDetails(eventId); } }
+    window.removeDoc = function(eventId, section, index) { const idx = events.findIndex(e => e.id === eventId); events[idx].docs[section].splice(index, 1); saveToStorage(); renderDetails(eventId); }
     function saveEvent() {
-        const title = document.getElementById('eventTitleInput').value;
-        const time = document.getElementById('eventTimeInput').value;
-        const duration = document.getElementById('eventDurationInput').value || 60;
-        const isFloating = document.getElementById('floatingInput').checked;
-        const dDate = document.getElementById('deadlineDateInput').value ? fromInputDate(document.getElementById('deadlineDateInput').value) : null;
-        const dTime = document.getElementById('deadlineTimeInput').value;
-
-        if (title && clickedDate && (time || isFloating)) {
-            const newEvent = {
-                id: Date.now().toString(), date: clickedDate, title: title, time: time || "", 
-                duration: duration, type: currentType, isFloating: isFloating, linkedToIds: [],
-                deadlineDate: dDate, deadlineTime: dTime,
-                docs: { context: [], preparation: [], outcome: [] }, isCompleted: false, preparation: "", outcome: ""
-            };
-            events.push(newEvent); saveToStorage(); document.getElementById('eventTitleInput').value = ''; load();
-        } else { alert("Title and Time required."); }
+        const title = document.getElementById('eventTitleInput').value; const time = document.getElementById('eventTimeInput').value; const duration = document.getElementById('eventDurationInput').value || 60; const isFloating = document.getElementById('floatingInput').checked;
+        const dDate = document.getElementById('deadlineDateInput').value ? fromInputDate(document.getElementById('deadlineDateInput').value) : null; const dTime = document.getElementById('deadlineTimeInput').value;
+        if (title && clickedDate && (time || isFloating)) { const newEvent = { id: Date.now().toString(), date: clickedDate, title: title, time: time || "", duration: duration, type: currentType, isFloating: isFloating, linkedToIds: [], deadlineDate: dDate, deadlineTime: dTime, docs: { context: [], preparation: [], outcome: [] }, isCompleted: false, preparation: "", outcome: "" }; events.push(newEvent); saveToStorage(); document.getElementById('eventTitleInput').value = ''; load(); } else { alert("Title and Time required."); }
     }
-    window.addConnection = (currentId) => {
-        const selectedId = document.getElementById('linkSelect').value;
-        if (!selectedId) return;
-        const idx = events.findIndex(e => e.id === currentId);
-        events[idx].linkedToIds.push(selectedId);
-        saveToStorage(); load(); renderDetails(currentId);
-    };
-    window.removeConnection = (currentId, targetId) => {
-        const idx = events.findIndex(e => e.id === currentId);
-        events[idx].linkedToIds = events[idx].linkedToIds.filter(id => id !== targetId);
-        saveToStorage(); load(); renderDetails(currentId);
-    };
+    window.addConnection = (currentId) => { const selectedId = document.getElementById('linkSelect').value; if (!selectedId) return; const idx = events.findIndex(e => e.id === currentId); events[idx].linkedToIds.push(selectedId); saveToStorage(); load(); renderDetails(currentId); };
+    window.removeConnection = (currentId, targetId) => { const idx = events.findIndex(e => e.id === currentId); events[idx].linkedToIds = events[idx].linkedToIds.filter(id => id !== targetId); saveToStorage(); load(); renderDetails(currentId); };
     let timeoutId;
-    function saveText(id, field, value) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-            const idx = events.findIndex(e => e.id === id);
-            if (idx > -1) { events[idx][field] = value; saveToStorage(); }
-        }, 500);
-    }
-    window.deleteEvent = (id) => {
-        if(confirm("Delete?")) {
-            events = events.filter(e => e.id !== id);
-            saveToStorage(); selectedEventId = null; load();
-            document.getElementById('detail-placeholder').style.display='flex';
-            document.getElementById('detail-content').style.display='none';
-        }
-    };
-    function saveToStorage() { localStorage.setItem('strategicEventsV6', JSON.stringify(events)); }
+    function saveText(id, field, value) { clearTimeout(timeoutId); timeoutId = setTimeout(() => { const idx = events.findIndex(e => e.id === id); if (idx > -1) { events[idx][field] = value; saveToStorage(); } }, 500); }
+    window.deleteEvent = (id) => { if(confirm("Delete?")) { events = events.filter(e => e.id !== id); saveToStorage(); selectedEventId = null; load(); document.getElementById('detail-placeholder').style.display='flex'; document.getElementById('detail-content').style.display='none'; } };
+    function saveToStorage() { localStorage.setItem('strategicEventsV7', JSON.stringify(events)); }
     document.getElementById('addBtn').addEventListener('click', saveEvent);
     document.getElementById('backButton').addEventListener('click', () => { nav--; load(); });
     document.getElementById('nextButton').addEventListener('click', () => { nav++; load(); });
