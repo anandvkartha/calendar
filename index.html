@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Logic Calendar</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --todo: #f39c12;
+            --secondary: #f4f7f6;
+            --text: #333;
+            --white: #fff;
+            --danger: #e74c3c;
+            --success: #27ae60;
+            --gray: #ccc;
+            --light-blue: #e3f2fd;
+            --dark-blue: #2c3e50;
+            --done-gray: #95a5a6;
+            --purple: #9b59b6;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--secondary);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        #container {
+            width: 98vw;
+            max-width: 1800px;
+            height: 95vh;
+            background: var(--white);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- COLUMN 1: Calendar --- */
+        #calendar-section { flex: 2; display: flex; flex-direction: column; border-right: 1px solid #e0e0e0; min-width: 380px; }
+        #header button { background: rgba(255,255,255,0.2); border: none; padding: 4px 10px; color: white; border-radius: 4px; }
+        #weekdays { display: flex; background: #f9f9f9; padding: 5px 0; border-bottom: 1px solid #eee; }
+        #weekdays div { width: 14.28%; text-align: center; font-size: 0.8rem; color: #666; font-weight: bold;}
+        #calendar { display: flex; flex-wrap: wrap; flex-grow: 1; padding: 5px; overflow-y: auto; }
+        
+        .day {
+            width: 14.28%; height: 100px; padding: 5px; box-sizing: border-box; cursor: pointer;
+            border: 1px solid transparent; border-radius: 4px; display: flex; flex-direction: column; position: relative;
+        }
+        .day:hover { background-color: #f0f4f8; }
+        .day.selected { border: 2px solid var(--primary); background-color: var(--light-blue); }
+        .day.padding { cursor: default; }
+
+        /* Calendar Task Visualization */
+        .cal-task-container { display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-top: 2px; }
+        .cal-task-bar {
+            font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cal-event { background-color: var(--primary); color: white; }
+        .cal-todo { background-color: #fff8e1; color: #d35400; border: 1px dashed var(--todo); }
+        .cal-done { background-color: #e0e0e0; color: #888; text-decoration: line-through; border: 1px solid #ccc; }
+
+        /* --- COLUMN 2: Timeline --- */
+        #timeline-section { flex: 2; display: flex; flex-direction: column; border-right: 1px solid #e0e0e0; min-width: 360px; background-color: #fafafa; }
+        #add-event-form { padding: 15px; border-bottom: 1px solid #ddd; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+        
+        .type-selector { display: flex; gap: 0; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+        .type-btn {
+            flex: 1; padding: 8px; border: none; background: #f9f9f9; cursor: pointer;
+            font-weight: 600; font-size: 0.85rem; transition: 0.2s; color: #666;
+        }
+        .type-btn.active.event { background: var(--primary); color: white; }
+        .type-btn.active.todo { background: var(--todo); color: white; }
+        
+        .row { display: flex; gap: 10px; align-items: center; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        
+        /* Floating/Deadline Options */
+        .todo-options {
+            display: none; flex-direction: column; gap: 8px;
+            background: #fff8e1; padding: 10px; border-radius: 4px; border: 1px solid #ffe0b2;
+        }
+        .floating-option { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+        .floating-option input { width: auto; }
+
+        #addBtn { background-color: var(--success); color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 5px; cursor: pointer; }
+        
+        #timeline { flex-grow: 1; overflow-y: auto; }
+        .time-slot { display: flex; border-bottom: 1px solid #f0f0f0; min-height: 50px; }
+        .time-label { width: 45px; font-size: 0.7rem; color: #999; padding-top: 5px; text-align: right; padding-right: 5px; border-right: 1px solid #eee; background: #fafafa; }
+        .events-container { flex-grow: 1; padding: 2px; position: relative; }
+        
+        .event-card {
+            padding: 6px 10px; margin-bottom: 2px; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+            border-left: 3px solid; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .event-card.active { background-color: #e8f0fe; border-color: var(--primary) !important; font-weight: bold; }
+        .event-card.completed { opacity: 0.6; text-decoration: line-through; border-left-color: var(--done-gray) !important; background: #f9f9f9; border-style: solid !important; }
+        .event-card.floating, .event-card.type-todo { border-style: dashed; background-color: #fdfefe; }
+        
+        .type-event { border-left-color: var(--primary); color: var(--primary); border-style: solid; }
+        .type-todo { border-left-color: var(--todo); color: var(--todo); }
+        .task-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--success); }
+        .auto-tag { font-size: 0.65rem; background: var(--purple); color: white; padding: 1px 4px; border-radius: 3px; margin-left: auto; }
+        .constraint-tag { font-size: 0.65rem; background: #d35400; color: white; padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
+
+        /* --- COLUMN 3: Details --- */
+        #details-section { flex: 3; display: flex; flex-direction: column; min-width: 500px; background-color: #fff; }
+        .section-header { padding: 15px; background-color: var(--dark-blue); color: var(--white); display: flex; justify-content: space-between; align-items: center; height: 40px; }
+        .section-title { font-weight: 600; font-size: 0.95rem; margin: 0; }
+        
+        #detail-content { padding: 0; overflow-y: auto; flex-grow: 1; display: none; height: 100%; }
+        #detail-placeholder { padding: 40px; text-align: center; color: #999; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+
+        .detail-hero { padding: 20px; background: #fdfdfd; border-bottom: 1px solid #eee; display: flex; flex-direction: column; gap: 10px; }
+        .hero-title-input { font-size: 1.4rem; font-weight: bold; border: none; border-bottom: 1px dashed #ccc; width: 100%; color: #2c3e50; background: transparent; }
+        .hero-title-input:focus { outline: none; border-bottom: 1px solid var(--primary); }
+        .hero-meta-row { display: flex; gap: 10px; align-items: center; background: #f0f0f0; padding: 10px; border-radius: 6px; }
+        .meta-input { border: 1px solid #ddd; padding: 5px; border-radius: 4px; font-size: 0.85rem; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 0.7rem; color: white; text-transform: uppercase; }
+        .badge-event { background: var(--primary); }
+        .badge-todo { background: var(--todo); }
+
+        .logic-section { padding: 20px; border-bottom: 4px solid #f4f7f6; }
+        .logic-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .logic-number { background: #2c3e50; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 0.75rem; font-weight: bold; }
+        .logic-title { font-weight: 700; color: #2c3e50; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
+
+        .context-card { background-color: #f9fbe7; border-left: 4px solid #c0ca33; padding: 12px; border-radius: 4px; color: #333; margin-bottom: 10px; cursor: pointer; }
+        .doc-manager { background: #fff; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; }
+        .doc-list { list-style: none; padding: 0; margin: 0; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; border: 1px solid #eee; padding: 4px 8px; margin-bottom: 4px; border-radius: 4px; font-size: 0.8rem; }
+        .doc-link { color: var(--primary); text-decoration: none; display: flex; align-items: center; gap: 5px; }
+        .btn-rm-doc { color: #aaa; cursor: pointer; margin-left: 10px; font-weight: bold; }
+        
+        textarea { width: 100%; height: 80px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; font-size: 0.9rem; margin-bottom: 5px; }
+        .link-manager { display: flex; gap: 5px; margin-bottom: 10px; }
+        .link-btn { background: var(--primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
+        .chip-container { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+        .link-chip { background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 5px; margin-right: 5px; }
+        .action-bar { padding: 20px; text-align: right; background: #fafafa; border-top: 1px solid #eee; }
+        .btn-delete { background: white; border: 1px solid var(--danger); color: var(--danger); padding: 8px 15px; border-radius: 4px; }
+
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div id="calendar-section">
+        <div class="section-header" id="header">
+            <button id="backButton">&#8592;</button>
+            <div id="monthDisplay" class="section-title"></div>
+            <button id="nextButton">&#8594;</button>
+        </div>
+        <div id="weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+        <div id="calendar"></div>
+    </div>
+
+    <div id="timeline-section">
+        <div class="section-header" style="background: #ecf0f1; color: #333; border-bottom: 1px solid #ccc;">
+            <div id="selectedDateDisplay" class="section-title">Select Date</div>
+        </div>
+        
+        <div id="add-event-form">
+            <input id="eventTitleInput" type="text" placeholder="Task Title..." />
+            
+            <div class="type-selector">
+                <button type="button" class="type-btn active event" onclick="setType('event')" id="btn-type-event">Event</button>
+                <button type="button" class="type-btn todo" onclick="setType('todo')" id="btn-type-todo">To-Do</button>
+            </div>
+
+            <div class="row" id="timeRow">
+                <div style="flex:1">
+                    <label style="font-size:0.75rem; color:#666; display:block; margin-bottom:2px;">Time</label>
+                    <input id="eventTimeInput" type="time" />
+                </div>
+                <div style="flex:1">
+                    <label style="font-size:0.75rem; color:#666; display:block; margin-bottom:2px;">Duration (min)</label>
+                    <input id="eventDurationInput" type="number" value="60" min="15" step="15" />
+                </div>
+            </div>
+
+            <div class="todo-options" id="todoOptions">
+                <div class="floating-option">
+                    <input type="checkbox" id="floatingInput" onchange="toggleTimeInput()">
+                    <div>
+                        <strong>Auto-Schedule</strong><br>
+                        <span style="color:#666; font-size:0.75rem;">Automatically place before Linked Events</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div style="flex:1">
+                        <label style="font-size:0.75rem; color:#d35400; display:block; margin-bottom:2px; font-weight:bold;">Deadline Date (Optional)</label>
+                        <input id="deadlineDateInput" type="date" style="border-color:#ffe0b2;" />
+                    </div>
+                    <div style="flex:1">
+                        <label style="font-size:0.75rem; color:#d35400; display:block; margin-bottom:2px;">Time</label>
+                        <input id="deadlineTimeInput" type="time" value="17:00" style="border-color:#ffe0b2;" />
+                    </div>
+                </div>
+            </div>
+
+            <button id="addBtn">Add to Schedule</button>
+        </div>
+        
+        <div id="timeline"></div>
+    </div>
+
+    <div id="details-section">
+        <div class="section-header" style="background: white; color: #333; border-bottom: 1px solid #ccc;">
+            <div class="section-title">Details & Editing</div>
+        </div>
+        <div id="detail-placeholder"><p>Select an item to view or edit details.</p></div>
+        <div id="detail-content"></div>
+    </div>
+</div>
+
+<script>
+    let nav = 0; 
+    let clickedDate = null; 
+    let selectedEventId = null;
+    let currentType = 'event';
+
+    const timeToMins = (t) => { if(!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const minsToTime = (m) => { const h = Math.floor(m / 60); const min = m % 60; return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`; };
+    const toInputDate = (str) => { const d = new Date(str); return d.toISOString().split('T')[0]; }
+    const fromInputDate = (str) => { const [y, m, d] = str.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; }
+
+    let rawEvents = localStorage.getItem('strategicEventsV6') ? JSON.parse(localStorage.getItem('strategicEventsV6')) : [];
+    let events = rawEvents.map(e => ({
+        ...e,
+        linkedToIds: e.linkedToIds || [],
+        docs: e.docs || { context: [], preparation: [], outcome: [] },
+        isCompleted: e.isCompleted || false,
+        duration: e.duration || 60,
+        isFloating: e.isFloating || false,
+        calculatedTime: e.calculatedTime || null,
+        deadlineDate: e.deadlineDate || null,
+        deadlineTime: e.deadlineTime || null
+    }));
+
+    const getTodayString = () => {
+        const dt = new Date();
+        return `${dt.getMonth() + 1}/${dt.getDate()}/${dt.getFullYear()}`;
+    };
+
+    if (!clickedDate) clickedDate = getTodayString();
+
+    // --- UI Logic ---
+    window.setType = function(type) {
+        currentType = type;
+        document.getElementById('btn-type-event').className = `type-btn ${type === 'event' ? 'active event' : 'event'}`;
+        document.getElementById('btn-type-todo').className = `type-btn ${type === 'todo' ? 'active todo' : 'todo'}`;
+        const todoOpts = document.getElementById('todoOptions');
+        const timeInput = document.getElementById('eventTimeInput');
+        const floatCheck = document.getElementById('floatingInput');
+
+        if (type === 'event') {
+            todoOpts.style.display = 'none';
+            floatCheck.checked = false;
+            timeInput.disabled = false;
+            timeInput.parentElement.style.opacity = '1';
+        } else {
+            todoOpts.style.display = 'flex';
+            floatCheck.checked = true;
+            toggleTimeInput(); 
+        }
+    }
+
+    window.toggleTimeInput = function() {
+        const isFloating = document.getElementById('floatingInput').checked;
+        const timeInput = document.getElementById('eventTimeInput');
+        const timeRow = document.getElementById('timeRow');
+        if (isFloating) {
+            timeInput.disabled = true;
+            timeRow.style.opacity = '0.5';
+            timeInput.value = '';
+        } else {
+            timeInput.disabled = false;
+            timeRow.style.opacity = '1';
+        }
+    }
+
+    // --- REFINED AUTO-SCHEDULER (Prioritization) ---
+    function runAutoScheduler() {
+        const dayEvents = events.filter(e => e.date === clickedDate);
+        const fixedEvents = dayEvents.filter(e => !e.isFloating).sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
+        const floatingEvents = dayEvents.filter(e => e.isFloating);
+        
+        floatingEvents.forEach(e => e.calculatedTime = null);
+
+        const dayStart = 8 * 60; 
+        const dayEnd = 18 * 60;  
+
+        // 1. CALCULATE EFFECTIVE DEADLINE FOR EACH FLOATING TASK FIRST
+        // This is critical for sorting. We need to know which one *must* happen earliest.
+        floatingEvents.forEach(floatEvt => {
+            let deadlineMins = dayEnd; // Default to end of day
+
+            // A. Check explicit deadline
+            if (floatEvt.deadlineDate === clickedDate && floatEvt.deadlineTime) {
+                deadlineMins = Math.min(deadlineMins, timeToMins(floatEvt.deadlineTime));
+            }
+
+            // B. Check Linked Events (Parent Starts)
+            if (floatEvt.linkedToIds.length > 0) {
+                floatEvt.linkedToIds.forEach(pid => {
+                    const parent = dayEvents.find(e => e.id === pid);
+                    if (parent) {
+                        const pTime = parent.isFloating ? parent.calculatedTime : parent.time;
+                        if (pTime) {
+                            deadlineMins = Math.min(deadlineMins, timeToMins(pTime));
+                        }
+                    }
+                });
+            }
+            floatEvt.effectiveDeadline = deadlineMins;
+        });
+
+        // 2. SORT FLOATING EVENTS BY URGENCY (Earliest Effective Deadline First)
+        floatingEvents.sort((a, b) => a.effectiveDeadline - b.effectiveDeadline);
+
+        // 3. SCHEDULE THEM ONE BY ONE
+        // Note: As we schedule them, they effectively become "fixed" for the next iteration in this loop
+        // because we build the 'occupied' list dynamically.
+        const occupied = [...fixedEvents]; // Start with hard fixed events
+
+        floatingEvents.forEach(floatEvt => {
+            // Sort occupied slots by time
+            occupied.sort((a,b) => {
+                const tA = a.isFloating ? a.calculatedTime : a.time;
+                const tB = b.isFloating ? b.calculatedTime : b.time;
+                return timeToMins(tA) - timeToMins(tB);
+            });
+
+            let currentSlotStart = dayStart;
+            let found = false;
+            let finalTime = null;
+
+            // Find gap
+            for (let i = 0; i < occupied.length; i++) {
+                const s = occupied[i];
+                const sTime = s.isFloating ? s.calculatedTime : s.time;
+                if(!sTime) continue; 
+
+                const sStart = timeToMins(sTime);
+                const sEnd = sStart + parseInt(s.duration);
+
+                // If scheduled event starts after our deadline, stop checking (constraint violation)
+                // Actually, we shouldn't stop, we just can't overlap it.
+                
+                // Check gap: Start -> Next Event
+                if (sStart - currentSlotStart >= parseInt(floatEvt.duration)) {
+                    // Check constraint: Must finish before effectiveDeadline
+                    if (currentSlotStart + parseInt(floatEvt.duration) <= floatEvt.effectiveDeadline) {
+                        finalTime = minsToTime(currentSlotStart);
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (sEnd > currentSlotStart) currentSlotStart = sEnd;
+            }
+
+            // Check gap after last event
+            if (!found) {
+                if (floatEvt.effectiveDeadline - currentSlotStart >= parseInt(floatEvt.duration)) {
+                    finalTime = minsToTime(currentSlotStart);
+                    found = true;
+                }
+            }
+
+            if (found) {
+                floatEvt.calculatedTime = finalTime;
+                // Add to occupied list so next floating tasks respect this one
+                occupied.push(floatEvt);
+            } else {
+                floatEvt.calculatedTime = "18:00"; // Fail state
+            }
+        });
+    }
+
+    // --- Core Render ---
+    function load() {
+        runAutoScheduler(); 
+
+        const dt = new Date();
+        if (nav !== 0) dt.setMonth(new Date().getMonth() + nav);
+        const month = dt.getMonth(); 
+        const year = dt.getFullYear();
+        const paddingDays = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        document.getElementById('monthDisplay').innerText = `${dt.toLocaleDateString('en-us', { month: 'long' })} ${year}`;
+        const calendarEl = document.getElementById('calendar');
+        calendarEl.innerHTML = '';
+
+        for(let i = 1; i <= paddingDays + daysInMonth; i++) {
+            const daySquare = document.createElement('div');
+            daySquare.classList.add('day');
+            const dayString = `${month + 1}/${i - paddingDays}/${year}`;
+
+            if (i > paddingDays) {
+                daySquare.innerHTML = `<span style="font-weight:bold; font-size:0.8rem; color:#666;">${i - paddingDays}</span>`;
+                if (dayString === clickedDate) daySquare.classList.add('selected');
+
+                const dayEvents = events.filter(e => e.date === dayString);
+                
+                if(dayEvents.length > 0) {
+                    const taskContainer = document.createElement('div');
+                    taskContainer.className = 'cal-task-container';
+                    dayEvents.sort((a,b) => {
+                        // Sort by computed time
+                        const tA = timeToMins(a.isFloating ? a.calculatedTime : a.time);
+                        const tB = timeToMins(b.isFloating ? b.calculatedTime : b.time);
+                        return tA - tB;
+                    });
+                    
+                    dayEvents.slice(0, 3).forEach(evt => {
+                        const bar = document.createElement('div');
+                        bar.className = `cal-task-bar ${evt.isCompleted ? 'cal-done' : (evt.type === 'todo' ? 'cal-todo' : 'cal-event')}`;
+                        bar.innerText = evt.title;
+                        taskContainer.appendChild(bar);
+                    });
+                    if(dayEvents.length > 3) {
+                        const more = document.createElement('div');
+                        more.style.fontSize = '0.6rem';
+                        more.style.color = '#999';
+                        more.innerText = `+${dayEvents.length - 3} more`;
+                        taskContainer.appendChild(more);
+                    }
+                    daySquare.appendChild(taskContainer);
+                }
+                daySquare.addEventListener('click', () => { clickedDate = dayString; load(); });
+            } else { daySquare.classList.add('padding'); }
+            calendarEl.appendChild(daySquare);
+        }
+        renderTimeline();
+    }
+
+    function renderTimeline() {
+        document.getElementById('selectedDateDisplay').innerText = new Date(clickedDate).toLocaleDateString('en-us', { weekday: 'short', month: 'short', day: 'numeric' });
+        const timelineEl = document.getElementById('timeline');
+        timelineEl.innerHTML = '';
+
+        for (let i = 0; i < 24; i++) {
+            const timeSlot = document.createElement('div');
+            timeSlot.classList.add('time-slot');
+            const hourLabel = document.createElement('div');
+            hourLabel.classList.add('time-label');
+            hourLabel.innerText = `${i % 12 || 12} ${i >= 12 ? 'PM' : 'AM'}`;
+
+            const eventsContainer = document.createElement('div');
+            eventsContainer.classList.add('events-container');
+            
+            const slotEvents = events.filter(e => {
+                if (e.date !== clickedDate) return false;
+                const activeTime = e.isFloating ? e.calculatedTime : e.time;
+                if (!activeTime) return false;
+                return parseInt(activeTime.split(':')[0]) === i;
+            });
+
+            slotEvents.forEach(event => {
+                const eventCard = document.createElement('div');
+                eventCard.className = `event-card ${event.type === 'event' ? 'type-event' : 'type-todo'} ${event.isCompleted ? 'completed' : ''} ${event.isFloating ? 'floating' : ''}`;
+                if (selectedEventId === event.id) eventCard.classList.add('active');
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'task-checkbox';
+                checkbox.checked = event.isCompleted;
+                checkbox.onclick = (e) => { e.stopPropagation(); toggleCompletion(event.id); };
+
+                const displayTime = event.isFloating ? event.calculatedTime : event.time;
+                let metaInfo = "";
+                if (event.isFloating) {
+                    metaInfo = '<span class="auto-tag">AUTO</span>';
+                    // Show constraint source
+                    if(event.linkedToIds.length > 0) {
+                         const parent = events.find(e => e.id === event.linkedToIds[0]);
+                         if(parent) metaInfo += ` <span class="constraint-tag">BEFORE: ${parent.title}</span>`;
+                    }
+                }
+                
+                const textSpan = document.createElement('div');
+                textSpan.style.flex = "1";
+                textSpan.innerHTML = `<strong>${displayTime}</strong> ${event.title}`;
+
+                eventCard.onclick = () => selectEvent(event.id);
+                eventCard.appendChild(checkbox);
+                eventCard.appendChild(textSpan);
+                if(metaInfo) eventCard.insertAdjacentHTML('beforeend', metaInfo);
+                
+                eventsContainer.appendChild(eventCard);
+            });
+            timeSlot.appendChild(hourLabel);
+            timeSlot.appendChild(eventsContainer);
+            timelineEl.appendChild(timeSlot);
+        }
+    }
+
+    function toggleCompletion(id) {
+        const index = events.findIndex(e => e.id === id);
+        if (index > -1) {
+            events[index].isCompleted = !events[index].isCompleted;
+            saveToStorage(); load();
+        }
+    }
+
+    function selectEvent(id) {
+        selectedEventId = id;
+        renderTimeline();
+        renderDetails(id);
+    }
+
+    function renderDetails(id) {
+        const event = events.find(e => e.id === id);
+        const detailContent = document.getElementById('detail-content');
+        const detailPlaceholder = document.getElementById('detail-placeholder');
+        
+        if (!event) {
+            detailPlaceholder.style.display = 'flex';
+            detailContent.style.display = 'none';
+            return;
+        }
+        detailPlaceholder.style.display = 'none';
+        detailContent.style.display = 'block';
+
+        let linkOptions = '<option value="">-- Connect Event --</option>';
+        events.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(evt => {
+            if (evt.id !== event.id && !event.linkedToIds.includes(evt.id)) {
+                linkOptions += `<option value="${evt.id}">${evt.date} - ${evt.title}</option>`;
+            }
+        });
+        let chipsHtml = event.linkedToIds.map(linkedId => {
+            const parent = events.find(e => e.id === linkedId);
+            return parent ? `<div class="link-chip">${parent.title}<span class="remove-link" onclick="removeConnection('${event.id}', '${parent.id}')">&times;</span></div>` : '';
+        }).join('');
+
+        let contextHtml = '';
+        if (event.linkedToIds.length > 0) {
+            event.linkedToIds.forEach(linkedId => {
+                const parent = events.find(e => e.id === linkedId);
+                if (parent) {
+                    contextHtml += `<div class="context-card"><span class="context-label">Summary from: ${parent.title}</span><div class="context-text">"${parent.outcome || 'No outcome recorded.'}"</div></div>`;
+                }
+            });
+        } else {
+            contextHtml = '<div style="color:#aaa; font-style:italic; font-size:0.8rem;">No linked previous meetings.</div>';
+        }
+
+        const checkStatus = event.isCompleted ? 'checked' : '';
+        const timeVal = event.time || ""; 
+        const dateVal = toInputDate(event.date);
+        
+        let deadlineHtml = '';
+        if (event.type === 'todo') {
+            const ddVal = event.deadlineDate ? toInputDate(event.deadlineDate) : '';
+            const dtVal = event.deadlineTime || '';
+            deadlineHtml = `
+                <div class="hero-meta-row" style="background:#fff8e1; border:1px solid #ffe0b2;">
+                    <div style="flex:1"> <label style="font-size:0.7rem; color:#d35400;">Deadline Date</label> <input type="date" class="meta-input" style="width:100%" value="${ddVal}" onchange="updateMeta('${event.id}', 'deadlineDate', this.value)"> </div>
+                    <div style="flex:1"> <label style="font-size:0.7rem; color:#d35400;">Deadline Time</label> <input type="time" class="meta-input" style="width:100%" value="${dtVal}" onchange="updateMeta('${event.id}', 'deadlineTime', this.value)"> </div>
+                </div>
+            `;
+        }
+        
+        const autoCheck = event.isFloating ? 'checked' : '';
+        const timeDisabled = event.isFloating ? 'disabled' : '';
+
+        detailContent.innerHTML = `
+            <div class="detail-hero">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <span class="badge ${event.type === 'event' ? 'badge-event' : 'badge-todo'}">${event.type}</span>
+                    <label style="font-size:0.85rem; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" ${checkStatus} onclick="toggleCompletion('${event.id}')"> Complete
+                    </label>
+                </div>
+                <input class="hero-title-input" value="${event.title}" onchange="updateMeta('${event.id}', 'title', this.value)">
+                
+                <div class="hero-meta-row">
+                    <div style="flex:2"> <label style="font-size:0.7rem; color:#888;">Date</label> <input type="date" class="meta-input" style="width:100%" value="${dateVal}" onchange="updateMeta('${event.id}', 'date', this.value)"> </div>
+                    <div style="flex:1.5; display:flex; flex-direction:column;"> 
+                        <label style="font-size:0.7rem; color:#888;">Time 
+                            ${event.type === 'todo' ? `<label style="float:right; font-weight:normal; cursor:pointer;"><input type="checkbox" ${autoCheck} onchange="toggleAutoSchedule('${event.id}', this.checked)"> Auto</label>` : ''}
+                        </label> 
+                        <input type="time" class="meta-input" style="width:100%" value="${timeVal}" ${timeDisabled} onchange="updateMeta('${event.id}', 'time', this.value)"> 
+                    </div>
+                    <div style="flex:1"> <label style="font-size:0.7rem; color:#888;">Dur(m)</label> <input type="number" class="meta-input" style="width:100%" value="${event.duration}" onchange="updateMeta('${event.id}', 'duration', this.value)"> </div>
+                </div>
+                ${deadlineHtml}
+                ${event.isFloating ? '<small style="color:#9b59b6">Auto-Scheduled: ' + event.calculatedTime + '</small>' : ''}
+            </div>
+
+            <div style="padding:15px; border-bottom:1px solid #eee; background:#fafafa;">
+                <label style="font-size:0.75rem; font-weight:bold; color:#777;">LINKED MEETINGS</label>
+                <div class="link-manager"><select id="linkSelect" style="flex:1;">${linkOptions}</select><button class="link-btn" onclick="addConnection('${event.id}')">Link</button></div>
+                <div class="chip-container">${chipsHtml}</div>
+            </div>
+
+            <div class="logic-section"><div class="logic-header"><div class="logic-number">1</div><div class="logic-title">Context</div></div>${contextHtml}${renderDocManager(event.id, 'context', event.docs.context)}</div>
+            <div class="logic-section"><div class="logic-header"><div class="logic-number">2</div><div class="logic-title">Preparation</div></div><textarea id="prepInput" placeholder="Checklist...">${event.preparation || ''}</textarea>${renderDocManager(event.id, 'preparation', event.docs.preparation)}</div>
+            <div class="logic-section"><div class="logic-header"><div class="logic-number">3</div><div class="logic-title">Outcomes</div></div><textarea id="outcomeInput" placeholder="Results...">${event.outcome || ''}</textarea>${renderDocManager(event.id, 'outcome', event.docs.outcome)}</div>
+            <div class="action-bar"><button class="btn-delete" onclick="deleteEvent('${event.id}')">Delete Item</button></div>
+        `;
+        document.getElementById('prepInput').addEventListener('input', (e) => saveText(id, 'preparation', e.target.value));
+        document.getElementById('outcomeInput').addEventListener('input', (e) => saveText(id, 'outcome', e.target.value));
+    }
+
+    function renderDocManager(eventId, section, docs) {
+        let listHtml = docs.map((doc, index) => `<li class="doc-item"><a href="${doc.url}" target="_blank" class="doc-link">📄 ${doc.name}</a><span class="btn-rm-doc" onclick="removeDoc('${eventId}', '${section}', ${index})">&times;</span></li>`).join('');
+        return `<div class="doc-manager"><div class="doc-header">DOCUMENTS</div><ul class="doc-list">${listHtml}</ul><div class="doc-input-group"><input type="text" id="name-${section}" placeholder="Name" style="flex:1; border:1px solid #ddd; padding:4px;"><input type="text" id="url-${section}" placeholder="URL" style="flex:2; border:1px solid #ddd; padding:4px;"><button class="btn-add-doc" onclick="addDoc('${eventId}', '${section}')">Add</button></div></div>`;
+    }
+
+    // --- Actions ---
+    window.toggleAutoSchedule = function(id, isAuto) {
+        const idx = events.findIndex(e => e.id === id);
+        if (idx > -1) { events[idx].isFloating = isAuto; if (isAuto) events[idx].time = ""; saveToStorage(); load(); renderDetails(id); }
+    }
+    window.updateMeta = function(id, field, value) {
+        const idx = events.findIndex(e => e.id === id);
+        if (idx > -1) {
+            if (field === 'date' || field === 'deadlineDate') { events[idx][field] = fromInputDate(value); } 
+            else { events[idx][field] = value; }
+            if (field === 'time' && value !== "") { events[idx].isFloating = false; }
+            saveToStorage(); load(); renderDetails(id);
+        }
+    }
+    window.addDoc = function(eventId, section) {
+        const nameInput = document.getElementById(`name-${section}`);
+        const urlInput = document.getElementById(`url-${section}`);
+        if (nameInput.value && urlInput.value) {
+            const idx = events.findIndex(e => e.id === eventId);
+            if(!events[idx].docs[section]) events[idx].docs[section] = [];
+            events[idx].docs[section].push({ name: nameInput.value, url: urlInput.value });
+            saveToStorage(); renderDetails(eventId);
+        }
+    }
+    window.removeDoc = function(eventId, section, index) {
+        const idx = events.findIndex(e => e.id === eventId);
+        events[idx].docs[section].splice(index, 1);
+        saveToStorage(); renderDetails(eventId);
+    }
+    function saveEvent() {
+        const title = document.getElementById('eventTitleInput').value;
+        const time = document.getElementById('eventTimeInput').value;
+        const duration = document.getElementById('eventDurationInput').value || 60;
+        const isFloating = document.getElementById('floatingInput').checked;
+        const dDate = document.getElementById('deadlineDateInput').value ? fromInputDate(document.getElementById('deadlineDateInput').value) : null;
+        const dTime = document.getElementById('deadlineTimeInput').value;
+
+        if (title && clickedDate && (time || isFloating)) {
+            const newEvent = {
+                id: Date.now().toString(), date: clickedDate, title: title, time: time || "", 
+                duration: duration, type: currentType, isFloating: isFloating, linkedToIds: [],
+                deadlineDate: dDate, deadlineTime: dTime,
+                docs: { context: [], preparation: [], outcome: [] }, isCompleted: false, preparation: "", outcome: ""
+            };
+            events.push(newEvent); saveToStorage(); document.getElementById('eventTitleInput').value = ''; load();
+        } else { alert("Title and Time required."); }
+    }
+    window.addConnection = (currentId) => {
+        const selectedId = document.getElementById('linkSelect').value;
+        if (!selectedId) return;
+        const idx = events.findIndex(e => e.id === currentId);
+        events[idx].linkedToIds.push(selectedId);
+        saveToStorage(); load(); renderDetails(currentId);
+    };
+    window.removeConnection = (currentId, targetId) => {
+        const idx = events.findIndex(e => e.id === currentId);
+        events[idx].linkedToIds = events[idx].linkedToIds.filter(id => id !== targetId);
+        saveToStorage(); load(); renderDetails(currentId);
+    };
+    let timeoutId;
+    function saveText(id, field, value) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            const idx = events.findIndex(e => e.id === id);
+            if (idx > -1) { events[idx][field] = value; saveToStorage(); }
+        }, 500);
+    }
+    window.deleteEvent = (id) => {
+        if(confirm("Delete?")) {
+            events = events.filter(e => e.id !== id);
+            saveToStorage(); selectedEventId = null; load();
+            document.getElementById('detail-placeholder').style.display='flex';
+            document.getElementById('detail-content').style.display='none';
+        }
+    };
+    function saveToStorage() { localStorage.setItem('strategicEventsV6', JSON.stringify(events)); }
+    document.getElementById('addBtn').addEventListener('click', saveEvent);
+    document.getElementById('backButton').addEventListener('click', () => { nav--; load(); });
+    document.getElementById('nextButton').addEventListener('click', () => { nav++; load(); });
+    load();
+
+</script>
+</body>
+</html>
