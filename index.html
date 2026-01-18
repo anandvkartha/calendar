@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connected Calendar System</title>
+    <title>Calendar with Sticky Notes</title>
     <style>
         :root {
             --primary: #4a90e2;
@@ -18,6 +18,8 @@
             --dark-blue: #2c3e50;
             --done-gray: #95a5a6;
             --purple: #9b59b6;
+            --sticky-yellow: #fff9c4;
+            --sticky-border: #fbc02d;
         }
 
         body {
@@ -43,26 +45,75 @@
             overflow: hidden;
         }
 
-        /* --- COLUMN 1: Calendar --- */
-        #calendar-section { flex: 2; display: flex; flex-direction: column; border-right: 1px solid #e0e0e0; min-width: 380px; }
+        /* --- COLUMN 1: Calendar & Sticky Notes --- */
+        #left-sidebar {
+            flex: 1.5; /* Reduced width slightly */
+            display: flex; 
+            flex-direction: column; 
+            border-right: 1px solid #e0e0e0; 
+            min-width: 320px;
+        }
+
+        /* Top Half: Calendar */
+        #calendar-wrapper {
+            flex: 0 0 auto; /* Don't grow indefinitely */
+            border-bottom: 1px solid #ddd;
+        }
+
         #header button { background: rgba(255,255,255,0.2); border: none; padding: 4px 10px; color: white; border-radius: 4px; }
         #weekdays { display: flex; background: #f9f9f9; padding: 5px 0; border-bottom: 1px solid #eee; }
-        #weekdays div { width: 14.28%; text-align: center; font-size: 0.8rem; color: #666; font-weight: bold;}
-        #calendar { display: flex; flex-wrap: wrap; flex-grow: 1; padding: 5px; overflow-y: auto; }
+        #weekdays div { width: 14.28%; text-align: center; font-size: 0.75rem; color: #666; font-weight: bold;}
+        
+        #calendar { display: flex; flex-wrap: wrap; padding: 5px; }
         
         .day {
-            width: 14.28%; height: 100px; padding: 5px; box-sizing: border-box; cursor: pointer;
-            border: 1px solid transparent; border-radius: 4px; display: flex; flex-direction: column; position: relative;
+            width: 14.28%; 
+            height: 55px; /* Smaller Height */
+            padding: 4px; box-sizing: border-box; cursor: pointer;
+            border: 1px solid transparent; border-radius: 4px; 
+            display: flex; flex-direction: column; position: relative;
         }
         .day:hover { background-color: #f0f4f8; }
         .day.selected { border: 2px solid var(--primary); background-color: var(--light-blue); }
         .day.padding { cursor: default; }
 
-        .cal-task-container { display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-top: 2px; }
-        .cal-task-bar { font-size: 0.65rem; padding: 1px 3px; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .cal-event { background-color: var(--primary); color: white; }
-        .cal-todo { background-color: #fff8e1; color: #d35400; border: 1px dashed var(--todo); }
-        .cal-done { background-color: #e0e0e0; color: #888; text-decoration: line-through; border: 1px solid #ccc; }
+        .dot-container { display: flex; gap: 2px; justify-content: center; margin-top: auto; }
+        .task-dot { width: 5px; height: 5px; border-radius: 50%; }
+        .dot-event { background-color: var(--primary); }
+        .dot-todo { background-color: var(--todo); }
+        .dot-done { background-color: var(--done-gray); }
+
+        /* Bottom Half: Sticky Notes */
+        #sticky-section {
+            flex: 1;
+            background-color: #fffde7; /* Very light yellow background */
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow: hidden;
+        }
+        
+        .sticky-header {
+            font-size: 0.85rem; font-weight: bold; color: #f57f17; 
+            margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;
+            display: flex; justify-content: space-between;
+        }
+
+        #stickyInput {
+            flex: 1;
+            background-color: var(--sticky-yellow);
+            border: 1px solid var(--sticky-border);
+            border-radius: 0 0 15px 0; /* Dog-ear effect */
+            padding: 15px;
+            font-family: 'Comic Sans MS', 'Segoe UI', sans-serif; /* Playful font for notes */
+            font-size: 0.95rem;
+            color: #444;
+            resize: none;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+            outline: none;
+        }
+        #stickyInput::placeholder { color: #dcb67f; font-style: italic; }
+
 
         /* --- COLUMN 2: Timeline --- */
         #timeline-section { flex: 2; display: flex; flex-direction: column; border-right: 1px solid #e0e0e0; min-width: 360px; background-color: #fafafa; }
@@ -127,13 +178,8 @@
         .logic-number { background: #2c3e50; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 0.75rem; font-weight: bold; }
         .logic-title { font-weight: 700; color: #2c3e50; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.5px; }
 
-        .context-card { 
-            background-color: #f9fbe7; border-left: 4px solid #c0ca33; 
-            padding: 12px; border-radius: 4px; color: #333; margin-bottom: 10px; 
-            cursor: pointer; transition: transform 0.2s, background 0.2s;
-        }
-        .context-card:hover { transform: translateX(3px); background-color: #f0f4c3; }
-        
+        .context-card { background-color: #f9fbe7; border-left: 4px solid #c0ca33; padding: 12px; border-radius: 4px; color: #333; margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
+        .context-card:hover { transform: translateX(3px); background: #f0f4c3; }
         .doc-manager { background: #fff; border: 1px dashed #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; }
         .doc-list { list-style: none; padding: 0; margin: 0; }
         .doc-item { display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; border: 1px solid #eee; padding: 4px 8px; margin-bottom: 4px; border-radius: 4px; font-size: 0.8rem; }
@@ -147,23 +193,29 @@
         .link-chip { background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 5px; margin-right: 5px; }
         .action-bar { padding: 20px; text-align: right; background: #fafafa; border-top: 1px solid #eee; }
         .btn-delete { background: white; border: 1px solid var(--danger); color: var(--danger); padding: 8px 15px; border-radius: 4px; }
-
-        /* Animation for jump */
-        @keyframes flash { 0% { background-color: yellow; } 100% { background-color: transparent; } }
-        .highlight-flash { animation: flash 1.5s ease-out; }
     </style>
 </head>
 <body>
 
 <div id="container">
-    <div id="calendar-section">
-        <div class="section-header" id="header">
-            <button id="backButton">&#8592;</button>
-            <div id="monthDisplay" class="section-title"></div>
-            <button id="nextButton">&#8594;</button>
+    <div id="left-sidebar">
+        <div id="calendar-wrapper">
+            <div class="section-header" id="header">
+                <button id="backButton">&#8592;</button>
+                <div id="monthDisplay" class="section-title"></div>
+                <button id="nextButton">&#8594;</button>
+            </div>
+            <div id="weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+            <div id="calendar"></div>
         </div>
-        <div id="weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
-        <div id="calendar"></div>
+        
+        <div id="sticky-section">
+            <div class="sticky-header">
+                <span>Notes for <span id="stickyDateDisplay"></span></span>
+                <span>✏️</span>
+            </div>
+            <textarea id="stickyInput" placeholder="Jot down quick thoughts, ideas, or non-task reminders for this day..."></textarea>
+        </div>
     </div>
 
     <div id="timeline-section">
@@ -232,13 +284,13 @@
     let selectedEventId = null;
     let currentType = 'event';
 
-    // Helpers
     const timeToMins = (t) => { if(!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const minsToTime = (m) => { const h = Math.floor(m / 60); const min = m % 60; return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`; };
     const toInputDate = (str) => { const d = new Date(str); return d.toISOString().split('T')[0]; }
     const fromInputDate = (str) => { const [y, m, d] = str.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; }
 
-    let rawEvents = localStorage.getItem('strategicEventsV7') ? JSON.parse(localStorage.getItem('strategicEventsV7')) : [];
+    // --- DATA STORAGE ---
+    let rawEvents = localStorage.getItem('strategicEventsV8') ? JSON.parse(localStorage.getItem('strategicEventsV8')) : [];
     let events = rawEvents.map(e => ({
         ...e,
         linkedToIds: e.linkedToIds || [],
@@ -250,6 +302,9 @@
         deadlineDate: e.deadlineDate || null,
         deadlineTime: e.deadlineTime || null
     }));
+
+    // NEW: Daily Notes Storage
+    let dailyNotes = localStorage.getItem('dailyNotes') ? JSON.parse(localStorage.getItem('dailyNotes')) : {};
 
     const getTodayString = () => {
         const dt = new Date();
@@ -293,7 +348,7 @@
         }
     }
 
-    // --- AUTO-SCHEDULER (Prioritization) ---
+    // --- SCHEDULER ---
     function runAutoScheduler() {
         const dayEvents = events.filter(e => e.date === clickedDate);
         const fixedEvents = dayEvents.filter(e => !e.isFloating).sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
@@ -302,7 +357,6 @@
         floatingEvents.forEach(e => e.calculatedTime = null);
         const dayStart = 8 * 60; const dayEnd = 18 * 60;  
 
-        // 1. Calculate Effective Deadline
         floatingEvents.forEach(floatEvt => {
             let deadlineMins = dayEnd; 
             if (floatEvt.deadlineDate === clickedDate && floatEvt.deadlineTime) {
@@ -320,10 +374,8 @@
             floatEvt.effectiveDeadline = deadlineMins;
         });
 
-        // 2. Sort by Urgency
         floatingEvents.sort((a, b) => a.effectiveDeadline - b.effectiveDeadline);
 
-        // 3. Schedule
         const occupied = [...fixedEvents]; 
         floatingEvents.forEach(floatEvt => {
             occupied.sort((a,b) => {
@@ -358,19 +410,16 @@
                     found = true;
                 }
             }
-
-            if (found) {
-                floatEvt.calculatedTime = finalTime;
-                occupied.push(floatEvt);
-            } else {
-                floatEvt.calculatedTime = "18:00"; 
-            }
+            if (found) { floatEvt.calculatedTime = finalTime; occupied.push(floatEvt); } 
+            else { floatEvt.calculatedTime = "18:00"; }
         });
     }
 
-    // --- Core Render ---
+    // --- CORE RENDER ---
     function load() {
         runAutoScheduler(); 
+        renderStickyNote(); // NEW: Load sticky note for date
+
         const dt = new Date();
         if (nav !== 0) dt.setMonth(new Date().getMonth() + nav);
         const month = dt.getMonth(); 
@@ -388,26 +437,21 @@
             const dayString = `${month + 1}/${i - paddingDays}/${year}`;
 
             if (i > paddingDays) {
-                daySquare.innerHTML = `<span style="font-weight:bold; font-size:0.8rem; color:#666;">${i - paddingDays}</span>`;
+                daySquare.innerHTML = `<span style="font-weight:bold; font-size:0.75rem; color:#666;">${i - paddingDays}</span>`;
                 if (dayString === clickedDate) daySquare.classList.add('selected');
 
                 const dayEvents = events.filter(e => e.date === dayString);
+                
                 if(dayEvents.length > 0) {
                     const taskContainer = document.createElement('div');
-                    taskContainer.className = 'cal-task-container';
+                    taskContainer.className = 'dot-container';
+                    // Just dots for compactness
                     dayEvents.sort((a,b) => (a.type === 'event' ? -1 : 1));
-                    dayEvents.slice(0, 3).forEach(evt => {
-                        const bar = document.createElement('div');
-                        bar.className = `cal-task-bar ${evt.isCompleted ? 'cal-done' : (evt.type === 'todo' ? 'cal-todo' : 'cal-event')}`;
-                        bar.innerText = evt.title;
-                        taskContainer.appendChild(bar);
+                    dayEvents.slice(0, 5).forEach(evt => {
+                        const dot = document.createElement('div');
+                        dot.className = `task-dot ${evt.isCompleted ? 'dot-done' : (evt.type === 'todo' ? 'dot-todo' : 'dot-event')}`;
+                        taskContainer.appendChild(dot);
                     });
-                    if(dayEvents.length > 3) {
-                        const more = document.createElement('div');
-                        more.style.fontSize = '0.6rem';
-                        more.innerText = `+${dayEvents.length - 3} more`;
-                        taskContainer.appendChild(more);
-                    }
                     daySquare.appendChild(taskContainer);
                 }
                 daySquare.addEventListener('click', () => { clickedDate = dayString; load(); });
@@ -417,6 +461,19 @@
         renderTimeline();
     }
 
+    // --- STICKY NOTE LOGIC ---
+    function renderStickyNote() {
+        document.getElementById('stickyDateDisplay').innerText = new Date(clickedDate).toLocaleDateString('en-us', { month: 'numeric', day: 'numeric' });
+        const note = dailyNotes[clickedDate] || "";
+        document.getElementById('stickyInput').value = note;
+    }
+
+    document.getElementById('stickyInput').addEventListener('input', (e) => {
+        dailyNotes[clickedDate] = e.target.value;
+        localStorage.setItem('dailyNotes', JSON.stringify(dailyNotes));
+    });
+
+    // --- TIMELINE ---
     function renderTimeline() {
         document.getElementById('selectedDateDisplay').innerText = new Date(clickedDate).toLocaleDateString('en-us', { weekday: 'short', month: 'short', day: 'numeric' });
         const timelineEl = document.getElementById('timeline');
@@ -478,33 +535,20 @@
         }
     }
 
-    // --- Jump / Navigation Logic ---
+    // --- Jump Logic ---
     window.jumpToEvent = function(targetId, targetDate) {
-        // 1. Calc nav diff to switch month if needed
         const targetDateObj = new Date(targetDate);
-        const currentDateObj = new Date(); // base reference for 'nav=0' is usually current real month, 
-        // but our 'nav' variable is offset from TODAY. 
-        // Better logic: set nav so that the calendar shows targetDate's month.
         const today = new Date();
         const monthDiff = (targetDateObj.getFullYear() - today.getFullYear()) * 12 + (targetDateObj.getMonth() - today.getMonth());
         nav = monthDiff;
-
-        // 2. Set clicked date
         clickedDate = targetDate;
-
-        // 3. Reload UI
         load();
-        
-        // 4. Select the event
         selectEvent(targetId);
-
-        // 5. Scroll to card in timeline
         setTimeout(() => {
             const card = document.getElementById(`card-${targetId}`);
             if (card) {
                 card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                card.classList.add('highlight-flash');
-                setTimeout(() => card.classList.remove('highlight-flash'), 1500);
+                card.classList.add('active'); // highlight
             }
         }, 300);
     }
@@ -513,11 +557,7 @@
         const index = events.findIndex(e => e.id === id);
         if (index > -1) { events[index].isCompleted = !events[index].isCompleted; saveToStorage(); load(); }
     }
-    function selectEvent(id) {
-        selectedEventId = id;
-        renderTimeline();
-        renderDetails(id);
-    }
+    function selectEvent(id) { selectedEventId = id; renderTimeline(); renderDetails(id); }
 
     function renderDetails(id) {
         const event = events.find(e => e.id === id);
@@ -632,7 +672,7 @@
     let timeoutId;
     function saveText(id, field, value) { clearTimeout(timeoutId); timeoutId = setTimeout(() => { const idx = events.findIndex(e => e.id === id); if (idx > -1) { events[idx][field] = value; saveToStorage(); } }, 500); }
     window.deleteEvent = (id) => { if(confirm("Delete?")) { events = events.filter(e => e.id !== id); saveToStorage(); selectedEventId = null; load(); document.getElementById('detail-placeholder').style.display='flex'; document.getElementById('detail-content').style.display='none'; } };
-    function saveToStorage() { localStorage.setItem('strategicEventsV7', JSON.stringify(events)); }
+    function saveToStorage() { localStorage.setItem('strategicEventsV8', JSON.stringify(events)); }
     document.getElementById('addBtn').addEventListener('click', saveEvent);
     document.getElementById('backButton').addEventListener('click', () => { nav--; load(); });
     document.getElementById('nextButton').addEventListener('click', () => { nav++; load(); });
